@@ -1,0 +1,3 @@
+const CONFIG = {
+  API_URL: 'YOUR_RENDER_URL_HERE'
+};
