@@ -1,3 +1,3 @@
 const CONFIG = {
-  API_URL: 'YOUR_RENDER_URL_HERE'
+  API_URL: 'https://codingassistant-q24x.onrender.com'
 };
