@@ -27,9 +27,40 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
+def detect_preferred_language(question: str, current_language: str) -> str:
+    """Detect preferred programming language from question or fallback to current/default."""
+    question_lower = question.lower()
+    
+    language_keywords = {
+        "python": ["python", "py"],
+        "cpp": ["c++", "cpp", "c plus"],
+        "java": ["java"],
+        "javascript": ["javascript", "js", "node"],
+        "go": ["go", "golang"],
+        "rust": ["rust"],
+        "kotlin": ["kotlin"],
+        "swift": ["swift"],
+        "typescript": ["typescript", "ts"]
+    }
+    
+    for lang, keywords in language_keywords.items():
+        for keyword in keywords:
+            if keyword in question_lower:
+                return lang
+    
+    if current_language and current_language != "unknown":
+        return current_language
+    
+    return "cpp"
+
 @app.post("/ask", response_model=QueryResponse)
 async def ask_question(request: QueryRequest):
     try:
+        preferred_lang = detect_preferred_language(
+            request.question, 
+            request.language or "cpp"
+        )
+        
         input_state = {
             "site": request.site,
             "problem_title": request.problem_title or "",
@@ -39,7 +70,9 @@ async def ask_question(request: QueryRequest):
             "question": request.question,
             "intent": "",
             "answer": "",
-            "agent_used": ""
+            "agent_used": "",
+            "preferred_language": preferred_lang,
+            "hint_steps": []
         }
         
         result = cp_graph.run(input_state)

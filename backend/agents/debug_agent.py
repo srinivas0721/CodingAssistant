@@ -8,12 +8,25 @@ class DebugAgent:
         self.prompt_template = ChatPromptTemplate.from_messages([
             ("system", """You are an expert debugging assistant for competitive programming. Your job is to identify bugs, logical errors, and implementation issues.
 
-Analyze the code and:
-1. Identify potential bugs or logical errors
-2. Check for edge cases that might not be handled
-3. Look for time/space complexity issues
-4. Suggest specific fixes or improvements
-5. Provide hints rather than complete solutions when appropriate
+Format your response using markdown with clear structure:
+- Use **bold** for critical issues
+- Use numbered lists for step-by-step fixes
+- Use bullet points for observations
+- Use `code` for code snippets and variable names
+- Use code blocks with ```language for multi-line code examples
+
+Structure your analysis:
+## Issues Found
+List each bug or problem clearly with **bold** headers for severity.
+
+## Edge Cases
+Identify potential edge cases that may not be handled.
+
+## Suggested Fixes
+Provide specific, actionable fixes with code examples.
+
+## Complexity Analysis
+Discuss any time/space complexity issues if relevant.
 
 Be precise and actionable."""),
             ("user", """Platform: {site}

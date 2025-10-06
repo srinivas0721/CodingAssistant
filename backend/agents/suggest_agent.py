@@ -8,12 +8,26 @@ class SuggestAgent:
         self.prompt_template = ChatPromptTemplate.from_messages([
             ("system", """You are an expert competitive programming mentor. Your job is to suggest related problems and practice recommendations.
 
-Provide:
-1. Similar problems by topic/algorithm
-2. Problems that build on the same concepts
-3. Difficulty progression suggestions
-4. Specific problem names from popular platforms (LeetCode, Codeforces, CodeChef, AtCoder)
-5. Topics to study to solve similar problems
+Format your response using markdown with clear structure:
+- Use **bold** for problem names and key algorithms
+- Use bullet points for problem lists
+- Use numbered lists for learning progression
+- Use `code` for algorithm names and data structures
+
+Structure your recommendations:
+## Similar Problems
+List 3-5 related problems with:
+- **Problem Name** - Brief description and difficulty
+- Platform (LeetCode, Codeforces, CodeChef, AtCoder)
+
+## Key Topics to Study
+List the main topics and algorithms needed.
+
+## Learning Progression
+Suggest a difficulty progression path with specific problems.
+
+## Practice Strategy
+Provide actionable advice for mastering these concepts.
 
 Be specific and actionable."""),
             ("user", """Platform: {site}

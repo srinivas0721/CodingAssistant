@@ -4,6 +4,9 @@ from agents.intent_classifier import IntentClassifier
 from agents.explain_agent import ExplainAgent
 from agents.debug_agent import DebugAgent
 from agents.suggest_agent import SuggestAgent
+from agents.solver_agent import SolverAgent
+from agents.hint_agent import HintAgent
+from utils.hint_storage import hint_storage
 
 class GraphState(TypedDict):
     site: str
@@ -15,6 +18,8 @@ class GraphState(TypedDict):
     intent: str
     answer: str
     agent_used: str
+    preferred_language: str
+    hint_steps: list
 
 class CPAssistantGraph:
     def __init__(self):
@@ -22,6 +27,8 @@ class CPAssistantGraph:
         self.explain_agent = ExplainAgent()
         self.debug_agent = DebugAgent()
         self.suggest_agent = SuggestAgent()
+        self.solver_agent = SolverAgent()
+        self.hint_agent = HintAgent()
         
         self.graph = self._build_graph()
     
@@ -65,9 +72,46 @@ class CPAssistantGraph:
         state["agent_used"] = "SuggestAgent"
         return state
     
-    def _route_by_intent(self, state: GraphState) -> Literal["explain", "debug", "suggest"]:
+    def _solve_node(self, state: GraphState) -> GraphState:
+        preferred_lang = state.get("preferred_language", "cpp")
+        answer = self.solver_agent.run(
+            site=state["site"],
+            title=state.get("problem_title", ""),
+            problem=state.get("problem_statement", ""),
+            language=preferred_lang,
+            question=state["question"]
+        )
+        state["answer"] = answer
+        state["agent_used"] = "SolverAgent"
+        return state
+    
+    def _hint_node(self, state: GraphState) -> GraphState:
+        site = state["site"]
+        title = state.get("problem_title", "")
+        
+        hint_history = hint_storage.get_hint_history(site, title)
+        next_hint_num = hint_storage.get_next_hint_number(site, title)
+        
+        answer = self.hint_agent.run(
+            site=site,
+            title=title,
+            problem=state.get("problem_statement", ""),
+            hint_number=next_hint_num,
+            previous_hints=hint_history,
+            question=state["question"]
+        )
+        
+        hint_storage.add_hint(site, title, next_hint_num, answer)
+        
+        state["answer"] = answer
+        state["agent_used"] = "HintAgent"
+        state["hint_steps"] = [h.hint_number for h in hint_storage.get_hint_history(site, title)]
+        return state
+    
+    def _route_by_intent(self, state: GraphState) -> Literal["explain", "debug", "suggest", "solve", "hint"]:
         intent = state["intent"]
-        if intent in ["explain", "debug", "suggest"]:
+        valid_intents = ["explain", "debug", "suggest", "solve", "hint"]
+        if intent in valid_intents:
             return intent  # type: ignore
         return "explain"
     
@@ -78,6 +122,8 @@ class CPAssistantGraph:
         workflow.add_node("explain", self._explain_node)
         workflow.add_node("debug", self._debug_node)
         workflow.add_node("suggest", self._suggest_node)
+        workflow.add_node("solve", self._solve_node)
+        workflow.add_node("hint", self._hint_node)
         
         workflow.set_entry_point("classify")
         
@@ -87,13 +133,17 @@ class CPAssistantGraph:
             {
                 "explain": "explain",
                 "debug": "debug",
-                "suggest": "suggest"
+                "suggest": "suggest",
+                "solve": "solve",
+                "hint": "hint"
             }
         )
         
         workflow.add_edge("explain", END)
         workflow.add_edge("debug", END)
         workflow.add_edge("suggest", END)
+        workflow.add_edge("solve", END)
+        workflow.add_edge("hint", END)
         
         return workflow.compile()
     

@@ -12,8 +12,10 @@ Classify the user's question into ONE of these intents:
 - "explain" - User wants the problem explained or clarified
 - "debug" - User wants help finding bugs or errors in their code
 - "suggest" - User wants similar problem recommendations or practice suggestions
+- "solve" - User wants a complete code solution (keywords: "solve", "solution", "code for", "write code", "complete code")
+- "hint" - User wants a hint or clue (keywords: "hint", "clue", "help me figure", "guide me", "push in right direction")
 
-Respond with ONLY the intent word: explain, debug, or suggest"""),
+Respond with ONLY the intent word: explain, debug, suggest, solve, or hint"""),
             ("user", """User's Question: {question}
 Has Code: {has_code}
 
@@ -29,7 +31,8 @@ Intent:""")
         })
         intent = result.strip().lower()
         
-        if intent not in ["explain", "debug", "suggest"]:
+        valid_intents = ["explain", "debug", "suggest", "solve", "hint"]
+        if intent not in valid_intents:
             if has_code:
                 return "debug"
             return "explain"

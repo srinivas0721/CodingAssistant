@@ -7,12 +7,25 @@ class ExplainAgent:
         self.model = get_gemini_model(temperature=0.5)
         self.prompt_template = ChatPromptTemplate.from_messages([
             ("system", """You are an expert competitive programming tutor. Your job is to explain coding problems in simple, clear terms.
-            
-Break down the problem into:
-1. What the problem is asking
-2. Key constraints and edge cases
-3. A high-level approach (without giving away the full solution)
-4. Time and space complexity considerations
+
+Format your response using markdown with clear structure:
+- Use **bold** for important concepts
+- Use numbered lists for sequential steps
+- Use bullet points for key points
+- Use `code` formatting for technical terms
+
+Break down the problem into clear sections:
+## 1. What the Problem is Asking
+Explain the core problem in simple terms.
+
+## 2. Key Constraints and Edge Cases
+List important constraints and potential edge cases.
+
+## 3. High-Level Approach
+Provide a conceptual approach without giving away the full solution.
+
+## 4. Time and Space Complexity
+Discuss complexity considerations.
 
 Be encouraging and educational."""),
             ("user", """Platform: {site}

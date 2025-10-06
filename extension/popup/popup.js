@@ -3,6 +3,31 @@ const API_URL = CONFIG.API_URL;
 let currentContext = null;
 let chatHistory = [];
 
+function loadMarkedLibrary() {
+  return new Promise((resolve) => {
+    if (window.marked && window.DOMPurify) {
+      resolve();
+      return;
+    }
+    
+    let loadedCount = 0;
+    const checkComplete = () => {
+      loadedCount++;
+      if (loadedCount === 2) resolve();
+    };
+    
+    const markedScript = document.createElement('script');
+    markedScript.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+    markedScript.onload = checkComplete;
+    document.head.appendChild(markedScript);
+    
+    const purifyScript = document.createElement('script');
+    purifyScript.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js';
+    purifyScript.onload = checkComplete;
+    document.head.appendChild(purifyScript);
+  });
+}
+
 function createElement(tag, className, textContent) {
   const el = document.createElement(tag);
   if (className) el.className = className;
@@ -13,7 +38,17 @@ function createElement(tag, className, textContent) {
 function addMessage(content, type, agentUsed = null) {
   const messagesContainer = document.getElementById('messages');
   const messageDiv = createElement('div', `message ${type}`);
-  messageDiv.textContent = content;
+  
+  if (type === 'assistant') {
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-content';
+    const rawHtml = marked.parse(content);
+    const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+    contentWrapper.innerHTML = sanitizedHtml;
+    messageDiv.appendChild(contentWrapper);
+  } else {
+    messageDiv.textContent = content;
+  }
   
   if (agentUsed) {
     const badge = createElement('div', 'agent-badge', `${agentUsed}`);
@@ -68,7 +103,9 @@ async function sendMessage(question) {
   document.getElementById('input').value = '';
 }
 
-function initializeChat() {
+async function initializeChat() {
+  await loadMarkedLibrary();
+  
   const root = document.getElementById('root');
   
   root.innerHTML = `
