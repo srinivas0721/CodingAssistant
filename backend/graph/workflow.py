@@ -1,4 +1,4 @@
-from typing import TypedDict, Literal
+from typing import TypedDict, Literal, List
 from langgraph.graph import StateGraph, END
 from agents.intent_classifier import IntentClassifier
 from agents.explain_agent import ExplainAgent
@@ -6,7 +6,9 @@ from agents.debug_agent import DebugAgent
 from agents.suggest_agent import SuggestAgent
 from agents.solver_agent import SolverAgent
 from agents.hint_agent import HintAgent
+from agents.query_agent import QueryAgent
 from utils.hint_storage import hint_storage
+from utils.chat_storage import chat_storage
 
 class GraphState(TypedDict):
     site: str
@@ -20,6 +22,7 @@ class GraphState(TypedDict):
     agent_used: str
     preferred_language: str
     hint_steps: list
+    chat_history: str
 
 class CPAssistantGraph:
     def __init__(self):
@@ -29,6 +32,7 @@ class CPAssistantGraph:
         self.suggest_agent = SuggestAgent()
         self.solver_agent = SolverAgent()
         self.hint_agent = HintAgent()
+        self.query_agent = QueryAgent()
         
         self.graph = self._build_graph()
     
@@ -92,13 +96,21 @@ class CPAssistantGraph:
         hint_history = hint_storage.get_hint_history(site, title)
         next_hint_num = hint_storage.get_next_hint_number(site, title)
         
+        MAX_HINTS = 7
+        if next_hint_num > MAX_HINTS:
+            answer = f"**Maximum Hints Reached**\n\nYou've received all {MAX_HINTS} hints for this problem. These hints should guide you to the solution. Try implementing it yourself, or ask me to 'solve' the problem for a complete solution."
+            state["answer"] = answer
+            state["agent_used"] = "HintAgent"
+            return state
+        
         answer = self.hint_agent.run(
             site=site,
             title=title,
             problem=state.get("problem_statement", ""),
             hint_number=next_hint_num,
             previous_hints=hint_history,
-            question=state["question"]
+            question=state["question"],
+            max_hints=MAX_HINTS
         )
         
         hint_storage.add_hint(site, title, next_hint_num, answer)
@@ -108,12 +120,28 @@ class CPAssistantGraph:
         state["hint_steps"] = [h.hint_number for h in hint_storage.get_hint_history(site, title)]
         return state
     
-    def _route_by_intent(self, state: GraphState) -> Literal["explain", "debug", "suggest", "solve", "hint"]:
+    def _query_node(self, state: GraphState) -> GraphState:
+        site = state["site"]
+        title = state.get("problem_title", "")
+        chat_history = state.get("chat_history", "No previous conversation.")
+        
+        answer = self.query_agent.run(
+            site=site,
+            title=title,
+            problem=state.get("problem_statement", ""),
+            question=state["question"],
+            chat_history=chat_history
+        )
+        state["answer"] = answer
+        state["agent_used"] = "QueryAgent"
+        return state
+    
+    def _route_by_intent(self, state: GraphState) -> Literal["explain", "debug", "suggest", "solve", "hint", "query"]:
         intent = state["intent"]
-        valid_intents = ["explain", "debug", "suggest", "solve", "hint"]
+        valid_intents = ["explain", "debug", "suggest", "solve", "hint", "query"]
         if intent in valid_intents:
             return intent  # type: ignore
-        return "explain"
+        return "query"
     
     def _build_graph(self):
         workflow = StateGraph(GraphState)
@@ -124,6 +152,7 @@ class CPAssistantGraph:
         workflow.add_node("suggest", self._suggest_node)
         workflow.add_node("solve", self._solve_node)
         workflow.add_node("hint", self._hint_node)
+        workflow.add_node("query", self._query_node)
         
         workflow.set_entry_point("classify")
         
@@ -135,7 +164,8 @@ class CPAssistantGraph:
                 "debug": "debug",
                 "suggest": "suggest",
                 "solve": "solve",
-                "hint": "hint"
+                "hint": "hint",
+                "query": "query"
             }
         )
         
@@ -144,6 +174,7 @@ class CPAssistantGraph:
         workflow.add_edge("suggest", END)
         workflow.add_edge("solve", END)
         workflow.add_edge("hint", END)
+        workflow.add_edge("query", END)
         
         return workflow.compile()
     

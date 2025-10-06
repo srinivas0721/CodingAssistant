@@ -1,9 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from models.schemas import QueryRequest, QueryResponse
 from graph.workflow import CPAssistantGraph
 from utils.config import get_settings
+from utils.chat_storage import chat_storage
 import uvicorn
+import json
+import asyncio
 
 app = FastAPI(title="CP Assistant API")
 
@@ -53,17 +57,45 @@ def detect_preferred_language(question: str, current_language: str) -> str:
     
     return "cpp"
 
-@app.post("/ask", response_model=QueryResponse)
-async def ask_question(request: QueryRequest):
+async def generate_streaming_response(answer_text: str, agent_used: str, intent: str):
+    """Generate streaming response token by token."""
+    words = answer_text.split()
+    
+    for i, word in enumerate(words):
+        chunk = {
+            "token": word + (" " if i < len(words) - 1 else ""),
+            "done": False
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+        await asyncio.sleep(0.03)
+    
+    final_chunk = {
+        "token": "",
+        "done": True,
+        "agent_used": agent_used,
+        "intent": intent
+    }
+    yield f"data: {json.dumps(final_chunk)}\n\n"
+
+@app.post("/ask/stream")
+async def ask_question_stream(request: QueryRequest):
+    """Streaming endpoint that sends response token-by-token."""
     try:
         preferred_lang = detect_preferred_language(
             request.question, 
             request.language or "cpp"
         )
         
+        site = request.site
+        title = request.problem_title or ""
+        
+        chat_history = chat_storage.format_history_for_prompt(site, title)
+        
+        chat_storage.add_message(site, title, "user", request.question)
+        
         input_state = {
-            "site": request.site,
-            "problem_title": request.problem_title or "",
+            "site": site,
+            "problem_title": title,
             "problem_statement": request.problem_statement or "",
             "user_code": request.user_code or "",
             "language": request.language or "unknown",
@@ -72,10 +104,55 @@ async def ask_question(request: QueryRequest):
             "answer": "",
             "agent_used": "",
             "preferred_language": preferred_lang,
-            "hint_steps": []
+            "hint_steps": [],
+            "chat_history": chat_history
         }
         
         result = cp_graph.run(input_state)
+        
+        chat_storage.add_message(site, title, "assistant", result["answer"], result["agent_used"])
+        
+        return StreamingResponse(
+            generate_streaming_response(result["answer"], result["agent_used"], result["intent"]),
+            media_type="text/event-stream"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ask", response_model=QueryResponse)
+async def ask_question(request: QueryRequest):
+    """Non-streaming endpoint (backwards compatible)."""
+    try:
+        preferred_lang = detect_preferred_language(
+            request.question, 
+            request.language or "cpp"
+        )
+        
+        site = request.site
+        title = request.problem_title or ""
+        
+        chat_history = chat_storage.format_history_for_prompt(site, title)
+        
+        chat_storage.add_message(site, title, "user", request.question)
+        
+        input_state = {
+            "site": site,
+            "problem_title": title,
+            "problem_statement": request.problem_statement or "",
+            "user_code": request.user_code or "",
+            "language": request.language or "unknown",
+            "question": request.question,
+            "intent": "",
+            "answer": "",
+            "agent_used": "",
+            "preferred_language": preferred_lang,
+            "hint_steps": [],
+            "chat_history": chat_history
+        }
+        
+        result = cp_graph.run(input_state)
+        
+        chat_storage.add_message(site, title, "assistant", result["answer"], result["agent_used"])
         
         return QueryResponse(
             answer=result["answer"],

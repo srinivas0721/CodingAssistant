@@ -271,16 +271,18 @@ async function createChatModal() {
     userMsg.textContent = question;
     messagesDiv.appendChild(userMsg);
 
-    const loadingMsg = document.createElement('div');
-    loadingMsg.className = 'cp-message loading';
-    loadingMsg.textContent = 'Thinking...';
-    messagesDiv.appendChild(loadingMsg);
+    const assistantMsg = document.createElement('div');
+    assistantMsg.className = 'cp-message assistant';
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-content';
+    assistantMsg.appendChild(contentWrapper);
+    messagesDiv.appendChild(assistantMsg);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
     input.value = '';
 
     try {
-      const response = await fetch(`${API_URL}/ask`, {
+      const response = await fetch(`${API_URL}/ask/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -289,39 +291,73 @@ async function createChatModal() {
         })
       });
 
-      loadingMsg.remove();
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = '';
+      let agentUsed = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.token) {
+                accumulatedText += data.token;
+                const rawHtml = marked.parse(accumulatedText);
+                const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+                contentWrapper.innerHTML = sanitizedHtml;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+              }
+              if (data.done) {
+                agentUsed = data.agent_used;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+        }
+      }
+
+      if (buffer && buffer.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.slice(6));
+          if (data.token) {
+            accumulatedText += data.token;
+            const rawHtml = marked.parse(accumulatedText);
+            const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+            contentWrapper.innerHTML = sanitizedHtml;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
+          if (data.done) {
+            agentUsed = data.agent_used;
+          }
+        } catch (e) {
+          console.error('Error parsing final SSE data:', e);
+        }
+      }
       
-      const assistantMsg = document.createElement('div');
-      assistantMsg.className = 'cp-message assistant';
-      
-      const contentWrapper = document.createElement('div');
-      contentWrapper.className = 'message-content';
-      const rawHtml = marked.parse(data.answer);
-      const sanitizedHtml = DOMPurify.sanitize(rawHtml);
-      contentWrapper.innerHTML = sanitizedHtml;
-      assistantMsg.appendChild(contentWrapper);
-      
-      const badge = document.createElement('div');
-      badge.className = 'cp-agent-badge';
-      badge.textContent = data.agent_used;
-      assistantMsg.appendChild(badge);
-      
-      messagesDiv.appendChild(assistantMsg);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      if (agentUsed) {
+        const badge = document.createElement('div');
+        badge.className = 'cp-agent-badge';
+        badge.textContent = agentUsed;
+        assistantMsg.appendChild(badge);
+      }
 
     } catch (error) {
-      loadingMsg.remove();
-      const errorMsg = document.createElement('div');
-      errorMsg.className = 'cp-message assistant';
-      errorMsg.textContent = `Error: ${error.message}. Make sure the backend is running.`;
-      messagesDiv.appendChild(errorMsg);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      contentWrapper.textContent = `Error: ${error.message}. Make sure the backend is running.`;
     }
   };
 

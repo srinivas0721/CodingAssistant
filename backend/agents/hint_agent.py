@@ -17,13 +17,14 @@ Format your response using markdown with clear structure:
 - Be encouraging and supportive
 
 IMPORTANT RULES:
-1. You are providing Hint #{hint_number} out of a progressive hint sequence
+1. You are providing Hint #{hint_number} out of {max_hints} total hints
 2. Previous hints and their FULL CONTENT are shown below
 3. Do NOT repeat information from previous hints
 4. Build upon previous hints progressively - reference what was already revealed
 5. Each hint should reveal ONE new insight or step
-6. NEVER give the complete solution - leave room for the student to think
-7. End with: "Need more help? Ask for another hint!"
+6. As you approach hint {max_hints}, provide more specific guidance
+7. Hint {max_hints} should nearly reveal the solution approach but still require implementation
+8. End with: "Need more help? Ask for another hint!"
 
 Structure your hint:
 ## Hint #{hint_number}
@@ -50,7 +51,7 @@ Please provide Hint #{hint_number} that builds on the previous hints without rep
         self.chain = self.prompt_template | self.model | StrOutputParser()
     
     def run(self, site: str, title: str, problem: str, hint_number: int, 
-            previous_hints: List[HintEntry], question: str) -> str:
+            previous_hints: List[HintEntry], question: str, max_hints: int = 7) -> str:
         
         if not previous_hints:
             previous_hints_content = "Hint Number: 1 (First hint)\nNo previous hints have been given yet."
@@ -65,6 +66,7 @@ Please provide Hint #{hint_number} that builds on the previous hints without rep
             "title": title,
             "problem": problem,
             "hint_number": hint_number,
+            "max_hints": max_hints,
             "previous_hints_content": previous_hints_content,
             "question": question
         })

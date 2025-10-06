@@ -40,12 +40,15 @@ async function sendMessage(question) {
 
   addMessage(question, 'user');
   
-  const loadingDiv = createElement('div', 'message loading', 'Thinking...');
   const messagesContainer = document.getElementById('messages');
-  messagesContainer.appendChild(loadingDiv);
+  const messageDiv = createElement('div', 'message assistant');
+  const contentWrapper = document.createElement('div');
+  contentWrapper.className = 'message-content';
+  messageDiv.appendChild(contentWrapper);
+  messagesContainer.appendChild(messageDiv);
 
   try {
-    const response = await fetch(`${API_URL}/ask`, {
+    const response = await fetch(`${API_URL}/ask/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -56,24 +59,77 @@ async function sendMessage(question) {
       })
     });
 
-    loadingDiv.remove();
-
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    addMessage(data.answer, 'assistant', data.agent_used);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = '';
+    let agentUsed = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              accumulatedText += data.token;
+              const rawHtml = marked.parse(accumulatedText);
+              const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+              contentWrapper.innerHTML = sanitizedHtml;
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            if (data.done) {
+              agentUsed = data.agent_used;
+            }
+          } catch (e) {
+            console.error('Error parsing SSE data:', e);
+          }
+        }
+      }
+    }
+
+    if (buffer && buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6));
+        if (data.token) {
+          accumulatedText += data.token;
+          const rawHtml = marked.parse(accumulatedText);
+          const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+          contentWrapper.innerHTML = sanitizedHtml;
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        if (data.done) {
+          agentUsed = data.agent_used;
+        }
+      } catch (e) {
+        console.error('Error parsing final SSE data:', e);
+      }
+    }
+
+    if (agentUsed) {
+      const badge = createElement('div', 'agent-badge', agentUsed);
+      messageDiv.appendChild(badge);
+    }
     
     chatHistory.push({
       question: question,
-      answer: data.answer,
-      agent: data.agent_used
+      answer: accumulatedText,
+      agent: agentUsed
     });
 
   } catch (error) {
-    loadingDiv.remove();
-    addMessage(`Error: ${error.message}. Make sure the backend is running on ${API_URL}`, 'assistant');
+    contentWrapper.textContent = `Error: ${error.message}. Make sure the backend is running on ${API_URL}`;
   }
 
   document.getElementById('input').value = '';
