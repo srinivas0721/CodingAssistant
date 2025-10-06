@@ -1,30 +1,5 @@
 const API_URL = 'https://codingassistant-q24x.onrender.com';
 
-function loadMarkedLibrary() {
-  return new Promise((resolve) => {
-    if (window.marked && window.DOMPurify) {
-      resolve();
-      return;
-    }
-    
-    let loadedCount = 0;
-    const checkComplete = () => {
-      loadedCount++;
-      if (loadedCount === 2) resolve();
-    };
-    
-    const markedScript = document.createElement('script');
-    markedScript.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
-    markedScript.onload = checkComplete;
-    document.head.appendChild(markedScript);
-    
-    const purifyScript = document.createElement('script');
-    purifyScript.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js';
-    purifyScript.onload = checkComplete;
-    document.head.appendChild(purifyScript);
-  });
-}
-
 function extractLeetCodeContext() {
   const context = {
     site: 'leetcode',
@@ -63,7 +38,6 @@ function extractLeetCodeContext() {
 }
 
 async function createChatModal() {
-  await loadMarkedLibrary();
   
   if (document.getElementById('cp-assistant-modal')) {
     document.getElementById('cp-assistant-modal').style.display = 'flex';
