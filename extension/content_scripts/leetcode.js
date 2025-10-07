@@ -244,6 +244,25 @@ async function createChatModal() {
 
   const context = extractLeetCodeContext();
 
+  const messagesDiv = document.getElementById('cp-messages');
+  const welcomeMsg = document.createElement('div');
+  welcomeMsg.className = 'cp-message assistant';
+  const welcomeContent = document.createElement('div');
+  welcomeContent.className = 'message-content';
+  const welcomeHtml = marked.parse(`👋 **Welcome to CP Assistant!**
+
+I'm here to help you with:
+- 📖 **Explaining** problems in simple terms
+- 🐛 **Debugging** your code
+- 💡 **Hints** when you're stuck
+- 💻 **Solutions** with detailed explanations
+- 🔍 **Similar problems** for practice
+
+Just ask me anything about the problem!`);
+  welcomeContent.innerHTML = DOMPurify.sanitize(welcomeHtml);
+  welcomeMsg.appendChild(welcomeContent);
+  messagesDiv.appendChild(welcomeMsg);
+
   document.querySelector('.cp-close-btn').addEventListener('click', () => {
     modal.style.display = 'none';
   });
