@@ -58,16 +58,20 @@ def detect_preferred_language(question: str, current_language: str) -> str:
     return "cpp"
 
 async def generate_streaming_response(answer_text: str, agent_used: str, intent: str):
-    """Generate streaming response token by token."""
-    words = answer_text.split()
+    """Generate streaming response token by token while preserving markdown structure."""
+    import re
     
-    for i, word in enumerate(words):
+    tokens = re.findall(r'\S+|\s+', answer_text)
+    
+    for token in tokens:
         chunk = {
-            "token": word + (" " if i < len(words) - 1 else ""),
+            "token": token,
             "done": False
         }
         yield f"data: {json.dumps(chunk)}\n\n"
-        await asyncio.sleep(0.03)
+        
+        if '\n' not in token:
+            await asyncio.sleep(0.02)
     
     final_chunk = {
         "token": "",
