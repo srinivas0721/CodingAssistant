@@ -28,6 +28,7 @@ async def root():
     return {"message": "CP Assistant API is running", "status": "ok"}
 
 @app.get("/health")
+@app.head("/health")
 async def health():
     return {"status": "healthy"}
 
